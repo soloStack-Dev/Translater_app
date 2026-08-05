@@ -22,7 +22,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - `asserts/Home-asserts/`, `asserts/Feature-asserts/` — local images for home/features pages, imported as `@/asserts/...`. They are NOT in `public/`, so only `public/` assets are served at `/...`.
 - `Context/` — authoritative design/build specs (`Homepage/`, `Featurepage/`, `Voicepage/`, `sarvam-model-setup.md`). Follow them for copy, colors, and layout; the specs' TTS snippet is stale (see Sarvam notes below).
 - `UIDesign/` — reference screenshots (optional).
-- `lib/` — `utils.ts` (`cn`), `reveal.ts` (gsap entrance/scroll/stagger helpers used by all pages).
+- `lib/` — `utils.ts` (`cn`), `reveal.ts` (gsap entrance/scroll/stagger helpers used by all pages), `sarvam.ts` (server-only Sarvam helpers: `createSarvamClient`, `auraSystemPrompt`, language/script maps — shared by both API routes).
 - `app/globals.css` — Tailwind v4 `@theme`, design tokens, keyframes. Use Tailwind utilities + plain CSS here for alignment/positioning.
 
 ## Stack & conventions
@@ -32,14 +32,15 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - MUI, lucide-react, gsap, and motion are installed; shadcn components resolve via `@/components/ui`. Merge classes with `cn()` from `@/lib/utils`.
 
 ## Sarvam TTS (voice page)
-- API key is in `.env` as `SARVAM_API` (gitignored) — never hardcode it. Reads as `process.env.SARVAM_API` in `app/api/tts/route.ts` and `app/api/chat/route.ts`.
-- Text flow: user selects language (`hi-IN`, `ta-IN`, `ml-IN`, `kn-IN`) → types English text → `POST /api/tts` → route runs `client.text.translate(...)` then `client.textToSpeech.convert(...)` and returns ONLY `{ audioBase64 }` (voice-only; the translated text is not returned to the client).
-- Speech flow: mic records on the client (MediaRecorder, webm/opus) → base64 POST `/api/chat` → `client.speechToText.transcribe({ file })` (saaras:v3, auto-detects spoken language) → `client.chat.completions({ model: "sarvam-105b", messages: [system (reply in the selected language, native script, 1–3 sentences), user: transcript] })` → returns `{ transcript, response }` as UTF-8 JSON.
+- API key is in `.env` as `SARVAM_API` (gitignored) — never hardcode it. Reads as `process.env.SARVAM_API` in `lib/sarvam.ts` (`createSarvamClient`).
+- Text flow (`app/api/tts/route.ts`): user types in ANY language or romanized/mixed form (English, Hindi, Tamil, Malayalam, Kannada, Hinglish, Tanglish — e.g. "hey enna pandra eppo?") → `client.chat.completions({ model: "sarvam-105b", messages: [system: auraSystemPrompt(lang), user: text] })` → reply is spoken via `client.textToSpeech.convert(...)` → returns ONLY `{ audioBase64 }` (voice-only; reply text is NOT returned to the client).
+- Speech flow (`app/api/chat/route.ts`): mic records on the client (MediaRecorder, webm/opus) → base64 POST → `client.speechToText.transcribe({ file })` (saaras:v3, auto-detects spoken language, handles romanized/mixed speech) → same LLM prompt → returns `{ transcript, response }` as UTF-8 JSON.
+- `auraSystemPrompt` (in `lib/sarvam.ts`) enforces native script: reply MUST be in the selected language's script (Devanagari/Tamil/Malayalam/Kannada), even if the user wrote romanized text. Without this STRICT rule, `sarvam-105b` mirrors the user's romanization (e.g. replies "Vanakkam! Naan nallaa irukken..." instead of Tamil script), which makes bulbul TTS mispronounce.
 - Verified against installed SDK (`sarvamai@1.1.8`) types — these differ from `Context/sarvam-model-setup.md`:
   - TTS request field is `language_code`, NOT `target_language_code`.
   - `bulbul:v3` rejects `pitch`/`loudness`; use `pace` (0.5–2.0) and `temperature`.
   - Speaker must be a lowercase v3 voice, e.g. `speaker: "ritu"`.
-  - Translation: `client.text.translate({ input, source_language_code: "en-IN", target_language_code, model: "mayura:v1" })` → `translated_text`.
+  - Old translation-only path is gone: `client.text.translate` same-language normalization is rejected ("Source and target languages must be different"), so script normalization is handled by the prompt, not the translate API.
   - Chat `sarvam-105b` is a reasoning model: it spends many tokens in `reasoning_content`. Do NOT cap `max_tokens` low or `content` comes back empty — set `reasoning_effort: "low"` and omit `max_tokens` (verified: empty content bug caused by `max_tokens: 300`).
   - `speechToText.transcribe` takes `file: { data: Buffer, contentType, filename }` (Uploadable), response has `transcript` and `language_code`.
 - `sarvamai` is server-only; keep it in `serverExternalPackages` in `next.config.ts` and never import it into client components.

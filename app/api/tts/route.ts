@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { SarvamAIClient } from "sarvamai";
+import {
+  SUPPORTED_LANGUAGES,
+  SupportedLanguage,
+  auraSystemPrompt,
+  createSarvamClient,
+} from "@/lib/sarvam";
 
 export const runtime = "nodejs";
-
-const SUPPORTED_LANGUAGES = ["hi-IN", "ta-IN", "ml-IN", "kn-IN"] as const;
-type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
 
 const SPEAKER = "ritu";
 
@@ -35,28 +37,30 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const apiKey = process.env.SARVAM_API;
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "Server is missing the SARVAM_API key." },
-      { status: 500 }
-    );
-  }
-
   try {
-    const client = new SarvamAIClient({ apiSubscriptionKey: apiKey });
+    const client = createSarvamClient();
     const lang = language as SupportedLanguage;
 
-    const translation = await client.text.translate({
-      input: text,
-      source_language_code: "en-IN",
-      target_language_code: lang,
+    const chat = await client.chat.completions({
+      model: "sarvam-105b",
+      temperature: 0.4,
+      reasoning_effort: "low",
+      messages: [
+        { role: "system", content: auraSystemPrompt(lang) },
+        { role: "user", content: text },
+      ],
     });
 
-    const spokenText = translation.translated_text ?? text;
+    const reply = (chat.choices?.[0]?.message?.content ?? "").trim();
+    if (!reply) {
+      return NextResponse.json(
+        { error: "The model produced an empty reply. Please try again." },
+        { status: 502 }
+      );
+    }
 
     const tts = await client.textToSpeech.convert({
-      text: spokenText,
+      text: reply,
       language_code: lang,
       speaker: SPEAKER,
       model: "bulbul:v3",

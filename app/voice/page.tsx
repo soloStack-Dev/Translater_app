@@ -237,8 +237,9 @@ export default function VoicePage() {
             Speak in <span className="text-[#7A5C6B]">Your Language</span>
           </h1>
           <p data-hero-fade className="mt-4 text-base text-[#5C5C5C]">
-            Type in English for a voice response, or press the mic and talk —
-            Aura replies in the language you choose.
+            Type or talk in any language — English, {language.name} or a
+            romanized mix like &ldquo;hey enna pandra eppo?&rdquo; — Aura
+            replies in the language you choose.
           </p>
 
           <div
@@ -287,8 +288,10 @@ export default function VoicePage() {
               Type to Speak
             </h2>
             <p className="mt-1 text-sm text-[#5C5C5C]">
-              Write something in English and Aura will speak it back in{" "}
-              {language.name} — voice only.
+              Write anything — English, {language.name} or even romanized{" "}
+              {language.name} like &ldquo;hey enna pandra eppo?&rdquo; — Aura
+              understands it and speaks a reply back in {language.name}. Voice
+              only.
             </p>
 
             <label
@@ -301,7 +304,7 @@ export default function VoicePage() {
               id="voice-text"
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder="Type something… e.g. 'Good morning! What's the weather like today?'"
+              placeholder="Type anything… e.g. 'hey enna pandra eppo?' or 'Good morning!'"
               rows={3}
               className="w-full rounded-2xl border border-[#E5E5E5] bg-white px-5 py-4 text-[#1A1A1A] placeholder:text-[#9CA3AF] resize-none transition-shadow focus:outline-none focus:ring-2 focus:ring-[#7A5C6B]/40 focus:border-transparent shadow-sm"
             />
@@ -332,7 +335,7 @@ export default function VoicePage() {
 
             {ttsStatus === "loading" && (
               <p className="mt-4 text-sm font-medium text-[#9B7A8A] animate-pulse">
-                Translating your words and preparing the voice…
+                Aura is thinking and preparing your voice…
               </p>
             )}
 
@@ -376,8 +379,9 @@ export default function VoicePage() {
                   Speak to Aura
                 </h2>
                 <p className="mt-1 text-sm text-[#5C5C5C]">
-                  Tap the mic, say something, then tap it again when you are
-                  done. Aura replies in {language.name}.
+                  Tap the mic, say something in any language — even romanized{" "}
+                  {language.name} — then tap it again when you are done. Aura
+                  replies in {language.name}.
                 </p>
               </div>
 
