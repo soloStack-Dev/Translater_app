@@ -75,7 +75,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       audioBase64: audio,
-      translatedText: spokenText,
     });
   } catch (error) {
     const message =
