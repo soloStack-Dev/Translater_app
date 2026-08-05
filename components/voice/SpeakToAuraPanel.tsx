@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2, Mic, Square } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Language } from "@/lib/languages";
@@ -35,28 +35,60 @@ export function SpeakToAuraPanel({ language }: Props) {
   const [response, setResponse] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Tracks the language the current request was made for, so a response that
+  // arrives after the user switched language can be safely ignored.
+  const activeLanguageRef = useRef(language.code);
+  useEffect(() => {
+    activeLanguageRef.current = language.code;
+  }, [language.code]);
+
+  // Reset the result when the language changes. React's recommended way to
+  // reset state from a prop change is to do it DURING render (not in an
+  // effect), which keeps the panel mounted and its entrance animation intact.
+  const [prevLanguageCode, setPrevLanguageCode] = useState(language.code);
+  if (prevLanguageCode !== language.code) {
+    setPrevLanguageCode(language.code);
+    setStatus("idle");
+    setTranscript(null);
+    setResponse(null);
+    setError(null);
+  }
+
   // Send the finished recording to /api/chat and show the LLM's reply.
   async function handleRecording(blob: Blob) {
+    const requestLanguage = language.code;
     setStatus("loading");
     setError(null);
     setTranscript(null);
     setResponse(null);
 
     try {
+      // Nothing was captured (e.g. recording stopped instantly) — ask again
+      // instead of sending an empty file to the server.
+      if (blob.size === 0) {
+        throw new Error("I couldn't hear anything. Please try speaking again.");
+      }
+
       const audioBase64 = await blobToBase64(blob);
+      if (!audioBase64) {
+        throw new Error("Could not read the recording. Please try again.");
+      }
+
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           audioBase64,
           mimeType: blob.type || "audio/webm",
-          language: language.code,
+          language: requestLanguage,
         }),
       });
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || "Something went wrong.");
       }
+      // Drop the result if the user already switched language meanwhile.
+      if (requestLanguage !== activeLanguageRef.current) return;
       setTranscript(data.transcript);
       setResponse(data.response);
       setStatus("done");

@@ -5,11 +5,19 @@ import { useRef, useState } from "react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { useRevealAnimations } from "@/lib/reveal";
+import { cn } from "@/lib/utils";
 import { LANGUAGES, type LanguageCode } from "@/lib/languages";
 import { HeroVisual } from "@/components/voice/HeroVisual";
 import { LanguageSelector } from "@/components/voice/LanguageSelector";
 import { TypeToSpeakPanel } from "@/components/voice/TypeToSpeakPanel";
 import { SpeakToAuraPanel } from "@/components/voice/SpeakToAuraPanel";
+
+type InputMode = "type" | "speak";
+
+const INPUT_MODES: { id: InputMode; label: string }[] = [
+  { id: "type", label: "Type to Speak" },
+  { id: "speak", label: "Speak to Aura" },
+];
 
 export default function VoicePage() {
   // One ref for the whole page: gsap reveals every [data-*] element inside it.
@@ -19,6 +27,9 @@ export default function VoicePage() {
   // Selected language, shared by both input modes (type & speak).
   const [languageCode, setLanguageCode] = useState<LanguageCode>(LANGUAGES[0].code);
   const language = LANGUAGES.find((lang) => lang.code === languageCode)!;
+
+  // Only one input block shows at a time — the toggle picks which one.
+  const [inputMode, setInputMode] = useState<InputMode>("type");
 
   return (
     <div
@@ -46,19 +57,35 @@ export default function VoicePage() {
 
           <LanguageSelector selected={languageCode} onSelect={setLanguageCode} />
 
-          {/* key={languageCode} remounts the panels on language change so
-              stale results (old audio / old reply) are cleared. */}
-          <TypeToSpeakPanel key={languageCode} language={language} />
-
+          {/* Segmented control: show one input block at a time */}
           <div
             data-hero-fade
-            className="mt-6 flex items-center justify-center gap-3 text-xs font-medium uppercase tracking-wider text-[#9CA3AF]"
+            className="mt-8 inline-flex items-center gap-1 rounded-full border border-[#E5E5E5] bg-white/70 p-1 shadow-sm backdrop-blur"
           >
-            <span className="h-px w-10 bg-[#E5E5E5]" /> or speak
-            <span className="h-px w-10 bg-[#E5E5E5]" />
+            {INPUT_MODES.map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setInputMode(id)}
+                aria-pressed={inputMode === id}
+                className={cn(
+                  "rounded-full px-6 py-2.5 text-sm font-medium transition-colors",
+                  inputMode === id
+                    ? "bg-[#7A5C6B] text-white shadow-sm"
+                    : "text-[#5C5C5C] hover:text-[#1A1A1A]"
+                )}
+              >
+                {label}
+              </button>
+            ))}
           </div>
 
-          <SpeakToAuraPanel key={languageCode} language={language} />
+          {/* Panels reset themselves when the language changes. */}
+          {inputMode === "type" ? (
+            <TypeToSpeakPanel language={language} />
+          ) : (
+            <SpeakToAuraPanel language={language} />
+          )}
         </section>
       </main>
 

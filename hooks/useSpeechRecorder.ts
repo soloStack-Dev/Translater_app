@@ -28,6 +28,9 @@ export function useSpeechRecorder(onStop: (blob: Blob) => void) {
   }, []);
 
   // Stop recording. MediaRecorder's onstop event then delivers the blob.
+  // NOTE: the mic tracks are released inside onstop (after the encoder has
+  // flushed the final audio chunk). Stopping them here, synchronously, can
+  // cut the recording short and produce an EMPTY Blob.
   const stop = useCallback(() => {
     const recorder = recorderRef.current;
     if (!recorder || recorder.state !== "recording") return;
@@ -38,7 +41,6 @@ export function useSpeechRecorder(onStop: (blob: Blob) => void) {
     }
 
     recorder.stop();
-    recorder.stream.getTracks().forEach((track) => track.stop());
     setIsRecording(false);
   }, []);
 
@@ -59,11 +61,13 @@ export function useSpeechRecorder(onStop: (blob: Blob) => void) {
       if (event.data.size > 0) chunksRef.current.push(event.data);
     };
 
-    // When stopped, bundle the chunks into one Blob and hand it to the caller.
+    // When stopped, bundle the chunks into one Blob, release the mic and
+    // hand the recording to the caller.
     recorder.onstop = () => {
       const blob = new Blob(chunksRef.current, {
         type: recorder.mimeType || "audio/webm",
       });
+      recorder.stream.getTracks().forEach((track) => track.stop());
       onStop(blob);
     };
 
