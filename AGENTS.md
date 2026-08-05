@@ -45,4 +45,5 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   - Old translation-only path is gone: `client.text.translate` same-language normalization is rejected ("Source and target languages must be different"), so script normalization is handled by the prompt, not the translate API.
   - Chat `sarvam-105b` is a reasoning model: it spends many tokens in `reasoning_content`. Do NOT cap `max_tokens` low or `content` comes back empty — set `reasoning_effort: "low"` and omit `max_tokens` (verified: empty content bug caused by `max_tokens: 300`).
   - `speechToText.transcribe` takes `file: { data: Buffer, contentType, filename }` (Uploadable), response has `transcript` and `language_code`.
+  - STT rejects MIME types with parameters: Chrome's MediaRecorder reports `audio/webm;codecs=opus`, but Sarvam only accepts the bare `audio/webm`. Strip everything after `;` (both in `SpeakToAuraPanel` and in `lib/sarvam.ts` `transcribeAudio`).
 - `sarvamai` is server-only; keep it in `serverExternalPackages` in `next.config.ts` and never import it into client components.

@@ -27,6 +27,12 @@ function formatMicError(error: Error): string {
     : error.message;
 }
 
+// Chrome reports blob.type as "audio/webm;codecs=opus"; the STT API only
+// accepts the bare MIME type ("audio/webm"), so drop any ";…" parameters.
+function normalizeMimeType(mimeType: string): string {
+  return mimeType.split(";")[0].trim() || "audio/webm";
+}
+
 // Card: hold the mic, speak in any language → the LLM writes a reply in the
 // selected language (native script) which is then shown on screen.
 export function SpeakToAuraPanel({ language }: Props) {
@@ -79,7 +85,7 @@ export function SpeakToAuraPanel({ language }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           audioBase64,
-          mimeType: blob.type || "audio/webm",
+          mimeType: normalizeMimeType(blob.type),
           language: requestLanguage,
         }),
       });

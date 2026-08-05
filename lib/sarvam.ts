@@ -71,6 +71,13 @@ export async function generateAuraReply(
 // Speech-to-text: transcribe a decoded audio buffer (base64 → Buffer).
 // Returns the transcript, or an empty string when nothing was heard.
 // -----------------------------------------------------------------------------
+// STT only accepts bare MIME types (no ";codecs=…" parameters) — Chrome's
+// MediaRecorder reports "audio/webm;codecs=opus", so normalize here too,
+// regardless of what the client sent.
+function normalizeMimeType(mimeType: string): string {
+  return mimeType.split(";")[0].trim() || "audio/webm";
+}
+
 export async function transcribeAudio(
   audio: Buffer,
   mimeType: string
@@ -79,7 +86,7 @@ export async function transcribeAudio(
   const stt = await client.speechToText.transcribe({
     file: {
       data: audio,
-      contentType: mimeType || "audio/webm",
+      contentType: normalizeMimeType(mimeType),
       filename: "input.webm",
     },
   });
