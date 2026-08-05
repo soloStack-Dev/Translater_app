@@ -1,36 +1,30 @@
+// POST /api/tts — Type-to-Speak
+// Request:  { text: string, language: LanguageCode }
+// Flow:     1) The LLM understands the input (any language or romanized mix)
+//              and writes a spoken-style reply in the selected language.
+//           2) TTS turns that reply into speech.
+//           3) Only the audio is returned (voice-only response).
 import { NextRequest, NextResponse } from "next/server";
-import {
-  SUPPORTED_LANGUAGES,
-  SupportedLanguage,
-  auraSystemPrompt,
-  createSarvamClient,
-} from "@/lib/sarvam";
+import { generateAuraReply, synthesizeSpeech } from "@/lib/sarvam";
+import { isLanguageCode } from "@/lib/languages";
 
 export const runtime = "nodejs";
 
-const SPEAKER = "ritu";
-
 export async function POST(request: NextRequest) {
+  // --- 1. Read the JSON body --------------------------------------------------
   let body: { text?: unknown; language?: unknown };
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json(
-      { error: "Invalid JSON body." },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
+  // --- 2. Validate the input ---------------------------------------------------
   const { text, language } = body;
-
   if (typeof text !== "string" || !text.trim()) {
     return NextResponse.json({ error: "Text is required." }, { status: 400 });
   }
-
-  if (
-    typeof language !== "string" ||
-    !(SUPPORTED_LANGUAGES as readonly string[]).includes(language)
-  ) {
+  if (typeof language !== "string" || !isLanguageCode(language)) {
     return NextResponse.json(
       { error: "Unsupported language. Choose Hindi, Tamil, Malayalam or Kannada." },
       { status: 400 }
@@ -38,51 +32,14 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const client = createSarvamClient();
-    const lang = language as SupportedLanguage;
+    // --- 3. Let the LLM answer, then speak that answer --------------------------
+    const reply = await generateAuraReply(language, text);
+    const audioBase64 = await synthesizeSpeech(language, reply);
 
-    const chat = await client.chat.completions({
-      model: "sarvam-105b",
-      temperature: 0.4,
-      reasoning_effort: "low",
-      messages: [
-        { role: "system", content: auraSystemPrompt(lang) },
-        { role: "user", content: text },
-      ],
-    });
-
-    const reply = (chat.choices?.[0]?.message?.content ?? "").trim();
-    if (!reply) {
-      return NextResponse.json(
-        { error: "The model produced an empty reply. Please try again." },
-        { status: 502 }
-      );
-    }
-
-    const tts = await client.textToSpeech.convert({
-      text: reply,
-      language_code: lang,
-      speaker: SPEAKER,
-      model: "bulbul:v3",
-      pace: 1,
-      speech_sample_rate: 24000,
-      output_audio_codec: "mp3",
-    });
-
-    const audio = tts.audios?.[0];
-    if (!audio) {
-      return NextResponse.json(
-        { error: "No audio was generated." },
-        { status: 502 }
-      );
-    }
-
-    return NextResponse.json({
-      audioBase64: audio,
-    });
+    // --- 4. Return voice only ---------------------------------------------------
+    return NextResponse.json({ audioBase64 });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unexpected error";
+    const message = error instanceof Error ? error.message : "Unexpected error";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
