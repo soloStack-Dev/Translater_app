@@ -11,7 +11,7 @@ import { isLanguageCode } from "@/lib/languages";
 export const runtime = "nodejs";
 
 // Reject huge payloads before they reach the transcription API.
-const MAX_AUDIO_BYTES = 20_000_000;
+const MAX_AUDIO_BYTES = 20_000_000; // 20 MB
 
 export async function POST(request: NextRequest) {
   // --- 1. Read the JSON body --------------------------------------------------
