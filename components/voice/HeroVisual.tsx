@@ -1,8 +1,16 @@
-// Decorative animated background for the voice page: sound-wave bars,
-// pulsing rings and a morphing orb. Purely visual — no state or logic.
+/**
+ * Decorative animated background for the voice page:
+ *  - Sound-wave bars (5 bars with staggered heights + delays)
+ *  - Pulsing ripple rings
+ *  - A morphing gradient orb
+ *
+ * Purely visual — no state, no logic. Marked `aria-hidden` so screen readers
+ * skip this section and users don't hear "div, div, div, …".
+ */
 export function HeroVisual() {
-  // Bar heights and their staggered animation delays.
+  // Bar heights: tall in the centre, short on the edges (waveform shape).
   const waveBars = [16, 28, 36, 28, 16];
+  // Each bar is delayed by 0.1s from the previous one.
   const waveDelays = [0, 0.1, 0.2, 0.3, 0.4];
 
   return (
@@ -10,12 +18,12 @@ export function HeroVisual() {
       aria-hidden
       className="pointer-events-none absolute inset-x-0 top-10 flex flex-col items-center"
     >
-      {/* Sound-wave bars */}
+      {/* ─── Sound-wave bars ─── */}
       <div className="mb-10 flex items-end gap-1.5">
         {waveBars.map((height, index) => (
           <div
             key={index}
-            className="w-1 rounded-full bg-[#7A5C6B] animate-[wavebar_1.2s_ease-in-out_infinite]"
+            className="h-4 w-1 animate-[wavebar_1.2s_ease-in-out_infinite] rounded-full bg-accent-mauve"
             style={{
               height,
               animationDelay: `${waveDelays[index]}s`,
@@ -25,16 +33,20 @@ export function HeroVisual() {
         ))}
       </div>
 
-      {/* Pulsing rings + morphing orb */}
-      <div className="relative w-44 h-44 lg:w-52 lg:h-52">
+      {/* ─── Ripple rings + morphing orb ─── */}
+      <div className="relative h-44 w-44 lg:h-52 lg:w-52">
+        {/* Three expanding rings, staggered by 1.16s each. */}
         {[0, 1.16, 2.32].map((delay) => (
           <div
             key={delay}
-            className="absolute inset-0 m-auto w-40 h-40 rounded-full border border-[#7A5C6B]/20 animate-[ripple_3.5s_linear_infinite]"
+            className="absolute inset-0 m-auto h-40 w-40 animate-[ripple_3.5s_linear_infinite] rounded-full border border-accent-mauve/20"
             style={{ animationDelay: `${delay}s` }}
           />
         ))}
-        <div className="absolute inset-0 rounded-full animate-morph bg-gradient-to-br from-[#7A5C6B] to-[#9B7A8A] opacity-80" />
+
+        {/* The gooey gradient centre orb (morphs its border-radius via the
+            `morph` keyframe defined in globals.css). */}
+        <div className="absolute inset-0 animate-morph rounded-full bg-gradient-to-br from-accent-mauve to-dusty-mauve opacity-80" />
       </div>
     </div>
   );

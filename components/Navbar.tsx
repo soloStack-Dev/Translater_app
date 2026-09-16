@@ -4,20 +4,23 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
+
+import { NAV_LINKS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
-const navLinks = [
-  { label: "Voices", href: "/voice" },
-  { label: "Features", href: "/features" },
-  { label: "Journal", href: "/#journal" },
-  { label: "Pricing", href: "/#pricing" },
-];
-
+/**
+ * Sticky navigation bar.
+ *
+ * - Solid/backdrop-blurred once the page is scrolled past 24px.
+ * - Desktop: inline links + "Try Aura" CTA.
+ * - Mobile: hamburger that toggles a dropdown panel.
+ */
 export function Navbar() {
   const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
-  const [open, setOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
+  // Track scroll position to style the bar after the user scrolls.
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
     onScroll();
@@ -25,40 +28,45 @@ export function Navbar() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  // "/voice" -> true on /voice (and /voice/*); "/" -> true only on the home page.
   const isActive = (href: string) => {
     const target = href.split("#")[0];
     return target === "/" ? pathname === "/" : pathname.startsWith(target);
   };
 
-  const pinkCta = pathname === "/voice";
+  // Use the softer pink CTA style when already on the voice page.
+  const isVoicePage = pathname === "/voice";
 
   return (
     <header
       className={cn(
         "sticky top-0 z-50 transition-all duration-300",
         scrolled
-          ? "bg-[#FDFBF7]/90 backdrop-blur-sm shadow-[0_1px_8px_rgba(0,0,0,0.05)]"
+          ? "bg-cream/90 shadow-[0_1px_8px_rgba(0,0,0,0.05)] backdrop-blur-sm"
           : "bg-transparent"
       )}
     >
-      <nav className="h-[72px] max-w-7xl mx-auto px-6 lg:px-16 flex items-center justify-between">
+      <nav className="mx-auto flex h-[72px] max-w-7xl items-center justify-between px-6 lg:px-16">
+        {/* Brand / logo */}
         <Link
           href="/"
-          className="text-xl font-bold tracking-tight text-[#7A5C6B]"
+          className="text-xl font-bold tracking-tight text-accent-mauve"
         >
           Aura AI
         </Link>
 
-        <ul className="hidden md:flex items-center gap-8">
-          {navLinks.map((link) => (
+        {/* Desktop links */}
+        <ul className="hidden items-center gap-8 md:flex">
+          {NAV_LINKS.map((link) => (
             <li key={link.href}>
               <Link
                 href={link.href}
+                aria-current={isActive(link.href) ? "page" : undefined}
                 className={cn(
-                  "relative text-sm font-medium transition-colors after:absolute after:left-0 after:-bottom-1 after:h-[2px] after:bg-[#7A5C6B] after:transition-all after:duration-300 hover:text-[#7A5C6B] hover:after:w-full",
+                  "relative text-sm font-medium transition-colors after:absolute after:-bottom-1 after:left-0 after:h-[2px] after:bg-accent-mauve after:transition-all after:duration-300 hover:text-accent-mauve hover:after:w-full",
                   isActive(link.href)
-                    ? "text-[#7A5C6B] after:w-full"
-                    : "text-[#5C5C5C] after:w-0"
+                    ? "text-accent-mauve after:w-full"
+                    : "text-warm-text after:w-0"
                 )}
               >
                 {link.label}
@@ -67,51 +75,57 @@ export function Navbar() {
           ))}
         </ul>
 
+        {/* Right side: CTA + mobile burger */}
         <div className="flex items-center gap-3">
           <Link
             href="/voice"
             className={cn(
-              "hidden md:inline-flex rounded-full px-6 py-2.5 text-sm font-medium transition-all duration-200 hover:scale-105 hover:shadow-md",
-              pinkCta
-                ? "bg-[#FCE8F0] text-[#7A5C6B] border border-[#FCE8F0] hover:bg-[#7A5C6B] hover:text-white"
-                : "bg-[#7A5C6B] text-white hover:shadow-[0_8px_24px_rgba(122,92,107,0.35)]"
+              "hidden rounded-full px-6 py-2.5 text-sm font-medium transition-all duration-200 hover:scale-105 hover:shadow-md md:inline-flex",
+              isVoicePage
+                ? "border border-soft-pink bg-soft-pink text-accent-mauve hover:bg-accent-mauve hover:text-white"
+                : "bg-accent-mauve text-white hover:shadow-[0_8px_24px_rgba(122,92,107,0.35)]"
             )}
           >
             Try Aura
           </Link>
 
+          {/* Mobile menu toggle */}
           <button
             type="button"
-            aria-label="Toggle navigation menu"
-            onClick={() => setOpen((v) => !v)}
-            className="md:hidden inline-flex items-center justify-center w-10 h-10 rounded-full text-[#5C5C5C] hover:text-[#7A5C6B] hover:bg-[#FCE8F0]/60 transition-colors"
+            aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((v) => !v)}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-warm-text transition-colors hover:bg-soft-pink/60 hover:text-accent-mauve md:hidden"
           >
-            {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
       </nav>
 
-      {open && (
-        <div className="md:hidden bg-[#FDFBF7]/95 backdrop-blur-md border-t border-[#F0F0F0] px-6 py-4 flex flex-col gap-1">
-          {navLinks.map((link) => (
+      {/* Mobile dropdown panel */}
+      {menuOpen && (
+        <div className="flex flex-col gap-1 border-t border-line bg-cream/95 px-6 py-4 backdrop-blur-md md:hidden">
+          {NAV_LINKS.map((link) => (
             <Link
               key={link.href}
               href={link.href}
-              onClick={() => setOpen(false)}
+              onClick={() => setMenuOpen(false)}
+              aria-current={isActive(link.href) ? "page" : undefined}
               className={cn(
                 "rounded-xl px-4 py-3 text-sm font-medium transition-colors",
                 isActive(link.href)
-                  ? "text-[#7A5C6B] bg-[#FCE8F0]/60"
-                  : "text-[#5C5C5C] hover:text-[#7A5C6B] hover:bg-[#FDFBF7]"
+                  ? "bg-soft-pink text-accent-mauve"
+                  : "text-warm-text hover:bg-cream hover:text-accent-mauve"
               )}
             >
               {link.label}
             </Link>
           ))}
+
           <Link
             href="/voice"
-            onClick={() => setOpen(false)}
-            className="mt-2 inline-flex items-center justify-center rounded-full bg-[#7A5C6B] px-6 py-2.5 text-sm font-medium text-white transition-all duration-200 hover:scale-105 hover:shadow-md"
+            onClick={() => setMenuOpen(false)}
+            className="mt-2 inline-flex items-center justify-center rounded-full bg-accent-mauve px-6 py-2.5 text-sm font-medium text-white transition-all duration-200 hover:scale-105 hover:shadow-md"
           >
             Try Aura
           </Link>

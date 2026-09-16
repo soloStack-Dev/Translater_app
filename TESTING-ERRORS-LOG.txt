@@ -1,0 +1,279 @@
+================================================================================
+TESTING ERROR LOG  —  Aura AI (my-app)
+================================================================================
+Every failure encountered while setting up the Vitest test suite, the exact
+error, and how it was fixed. One entry per error.
+
+--------------------------------------------------------------------------------
+1. Vitest could not load: "Cannot find package 'vite'"
+--------------------------------------------------------------------------------
+WHEN: The very first `npm run test` attempt.
+WHERE: Vitest 5's ESM loader (instance transform).
+
+ERROR:  ERR_MODULE_NOT_FOUND: Cannot find package 'vite' imported from
+        .../node_modules/vitest/dist/chunks/...
+        (Vitest 5 expects `vite` to be an explicit dependency.)
+
+FIX:    Installed Vite as a dev dependency:
+        `npm install -D vite --legacy-peer-deps`
+        (--legacy-peer-deps is required in this repo because @vitejs/plugin-react
+        pulls in an older Babel that conflicts with the shadcn install.)
+
+--------------------------------------------------------------------------------
+2. @testing-library/react failed: "@testing-library/dom could not be found"
+--------------------------------------------------------------------------------
+WHEN: First `vitest run`.
+WHERE: test/components + test/pages (any React Testing Library render).
+
+ERROR:  TestingLibraryElementError: "@testing-library/dom" is a required peer
+        dependency of "@testing-library/react".
+
+FIX:    Installed the missing peer dependency:
+        `npm install -D @testing-library/dom --legacy-peer-deps`
+
+--------------------------------------------------------------------------------
+3. API route test suites crashed: "window is not defined"
+--------------------------------------------------------------------------------
+WHEN: Running test/api/tts-route.test.ts and test/api/chat-route.test.ts
+      (these use `// @vitest-environment node`).
+WHERE: test/setup.ts — the shared setup file runs in EVERY environment.
+
+ERROR:  ReferenceError: window is not defined
+          ❯ test/setup.ts:12: Object.defineProperty(window, "matchMedia", ...)
+
+ROOT:   The jsdom-only polyfills (matchMedia, scrollIntoView,
+        HTMLMediaElement) ran unconditionally — but these two suites run in
+        the `node` environment, which has no `window`.
+
+FIX:    Wrapped all DOM polyfills in `if (typeof window !== "undefined") { ... }`
+        in test/setup.ts. Node-environment suites now skip them entirely.
+
+--------------------------------------------------------------------------------
+4. JSON-LD object did not parse: "Expected `,` or `}` but found `string`"
+--------------------------------------------------------------------------------
+WHEN: test/seo/seo.test.ts imports app/page.tsx (vite:oxc transform).
+WHERE: app/page.tsx line 47 — third Offer block.
+
+ERROR:  [PARSE_ERROR] Expected `,` or `}` but found `string`
+           44 │   {
+           47 │   priceCurrency": "USD",
+          (the byte dump showed a stray `"` right after `priceCurrency`)
+
+ROOT:   A typo in the JSON-LD object: `priceCurrency": "USD"` instead of
+        `priceCurrency: "USD"`. The first two Offers were fine, which is why
+        the parser only choked on the third one.
+
+FIX:    Removed the stray quote. app/page.tsx:47 is now
+        `priceCurrency: "USD",`.
+
+--------------------------------------------------------------------------------
+5. "Found multiple elements" across every component/page test
+--------------------------------------------------------------------------------
+WHEN: All test/components/* and test/pages/* tests after the first fixes.
+WHERE: Every getByRole/getByText query (Navbar, Footer, voice panels,
+       home/voice pages, LanguageSelector…).
+
+ERROR:  TestingLibraryElementError: Found multiple elements with the role
+        "button" and name "Start recording"  (variants for every query)
+        — the DOM dump showed the previous test's render still attached.
+
+ROOT:   @testing-library/react only registers its automatic test teardown
+        (`cleanup()`) when a GLOBAL `afterEach` hook exists. Vitest was
+        configured with `globals: false`, so RTL never cleaned up between
+        tests and every render was appended to the same document → duplicate
+        roles/elements later.
+
+FIX:   In test/setup.ts:
+          import { cleanup } from "@testing-library/react";
+          import { afterEach } from "vitest";
+          afterEach(() => cleanup());
+        This restores one-render-at-a-time semantics even with `globals: false`.
+
+--------------------------------------------------------------------------------
+6. Sarvam SDK mock: "'() => currentClient' is not a constructor"
+--------------------------------------------------------------------------------
+WHEN: test/lib/sarvam.test.ts — every test that calls a helper.
+WHERE: beforeEach — `vi.mocked(SarvamAIClient).mockImplementation(...)`.
+
+ERROR:  TypeError: () => currentClient is not a constructor
+ROOT:   The helpers construct the client with `new SarvamAIClient(...)`.
+        `mockImplementation` was given an ARROW function; arrow functions are
+        not constructable, so `new` threw instead of returning the fake.
+
+FIX:    Switched to a regular function expression, which IS constructable and
+        whose returned object becomes the `new` result:
+          vi.mocked(SarvamAIClient).mockImplementation(function () {
+            return currentClient as never;
+          });
+
+--------------------------------------------------------------------------------
+7. absoluteUrl tests failed: expected URL to match /^https?:\/\//
+--------------------------------------------------------------------------------
+WHEN: test/lib/config.test.ts (and indirectly test/seo/seo.test.ts).
+WHERE: `absoluteUrl("/voice")` returned "/voice" instead of an absolute URL.
+
+ERROR:  AssertionError: expected '/voice' to match /^https?:\/\/.*\/voice$/
+
+ROOT:   lib/config.ts reads `process.env.NEXT_PUBLIC_SITE_URL` at MODULE LOAD
+        (`SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "/"`). The variable
+        was unset under Vitest, so `absoluteUrl()` correctly stayed relative.
+
+FIX:    In vitest.config.ts set a deterministic base URL for all test files:
+          env: { NEXT_PUBLIC_SITE_URL: "http://localhost:3000" }
+        Canonical/Open Graph/sitemap assertions now resolve against a real host.
+
+--------------------------------------------------------------------------------
+8. Hook test: mic tracks never marked "stopped"
+--------------------------------------------------------------------------------
+WHEN: test/hooks/useSpeechRecorder.test.tsx > "releases microphone tracks…".
+WHERE: `expect(stream.getTracks()[0].stop).toHaveBeenCalled()`.
+
+ERROR:  AssertionError: expected "vi.fn()" to be called at least once
+        (even though onStop HAD been called — the tracks were released)
+
+ROOT:   The fake returned `getTracks: () => [{ stop: vi.fn() }]`, creating a
+        NEW spy on every call. The test asserted on spy "A" while the hook
+        (correctly) stopped spy "B".
+
+FIX:    Capture a single spy and return it from every getTracks() call:
+          const stopTrack = vi.fn();
+          const stream = { getTracks: () => [{ stop: stopTrack }] };
+          expect(stopTrack).toHaveBeenCalled();
+
+--------------------------------------------------------------------------------
+9. Hook test: auto-stop at 30s never fired onStop
+--------------------------------------------------------------------------------
+WHEN: test/hooks/useSpeechRecorder.test.tsx > "counts elapsed seconds…".
+WHERE: `expect(onStop).toHaveBeenCalledTimes(1)` after advancing 27s.
+
+ERROR:  AssertionError: expected "vi.fn()" to be called 1 times, but got 0
+
+ROOT:   The fake MediaRecorder delivers `onstop` via `queueMicrotask`. With
+        Vitest fake timers, the SYNC `act()` advanced the interval (which
+        called `recorder.stop()`) but did not flush the microtask, so the
+        hook's `onstop` handler had not run yet when we asserted.
+
+FIX:    Use an async act so the microtask is flushed:
+          await act(async () => { vi.advanceTimersByTime(27_000); });
+
+--------------------------------------------------------------------------------
+10. Chat route test: expected 422, got 200 for a whitespace transcript
+--------------------------------------------------------------------------------
+WHEN: test/api/chat-route.test.ts > "returns 422 when nothing was transcribed".
+WHERE: app/api/chat/route.ts — the empty-transcript guard.
+
+ERROR:  AssertionError: expected 200 to be 422
+        (the mock returned "   " — three spaces)
+
+ROOT:   The guard checked `if (!transcript)`. A whitespace-only string is
+        truthy, so the request fell through to the LLM and returned 200.
+        "Nothing heard" should also cover whitespace-only STT output.
+
+FIX:    Trim before the guard in app/api/chat/route.ts:
+          const trimmedTranscript = transcript.trim();
+          if (!trimmedTranscript) { return jsonError(..., 422); }
+          const response = await generateAuraReply(language, trimmedTranscript);
+
+--------------------------------------------------------------------------------
+11. TypeToSpeakPanel: "Unable to find role=\"audio\""
+--------------------------------------------------------------------------------
+WHEN: test/components/voice/TypeToSpeakPanel.test.tsx — tests 1 and 4.
+WHERE: `screen.findByRole("audio")` / `queryByRole("audio")`.
+
+ERROR:  TestingLibraryElementError: Unable to find role="audio"
+        (the <audio> element WAS in the DOM — the dump showed it with
+        src="data:audio/mp3;base64,QUJD")
+
+ROOT:   jsdom assigns NO implicit ARIA role to <audio> (the HTML-AAM role
+        mapping for audio elements is not implemented), so byRole("audio")
+        can never match.
+
+FIX:    Query the element by tag + attribute instead:
+          await waitFor(() => {
+            expect(document.querySelector("audio")).toHaveAttribute(
+              "src", "data:audio/mp3;base64,QUJD"
+            );
+          });
+        and, for the reset test, assert `querySelector("audio")` is null.
+
+--------------------------------------------------------------------------------
+12. next build: "Request is not assignable to parameter of type 'NextRequest'"
+--------------------------------------------------------------------------------
+WHEN: `npm run build` (Next 16 runs TypeScript over the WHOLE project, tests
+      included — tests live under the tsconfig include path).
+WHERE: test/api/chat-route.test.ts + test/api/tts-route.test.ts — helper
+       `xxxRequest()` returned a plain `Request`.
+
+ERROR:  TS2345: Argument of type 'Request' is not assignable to parameter of
+        type 'NextRequest'. Type 'Request' is missing: cookies, nextUrl, page, ua
+
+ROOT:   The route handlers take `NextRequest`; the helper built a bare web
+        `Request`. Vitest (esbuild/esm) didn't complain, but tsc is strict.
+
+FIX:    Build a real NextRequest in the helpers:
+          import { NextRequest } from "next/server";
+          function chatRequest(body: unknown): NextRequest {
+            return new NextRequest("http://localhost:3000/api/chat", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: typeof body === "string" ? body : JSON.stringify(body),
+            });
+          }
+
+--------------------------------------------------------------------------------
+13. next build: FileReader error callback type mismatch (ProgressEvent)
+--------------------------------------------------------------------------------
+WHEN: `npm run build` — test/lib/audio.test.ts.
+WHERE: `setTimeout(() => this.onerror?.(new ProgressEvent<FileReader>("error")))`.
+
+ERROR:  TS2345: Argument of type 'ProgressEvent<EventTarget>' is not assignable
+        to parameter of type 'ProgressEvent<FileReader>'.
+        TS2558: Expected 0 type arguments, but got 1.
+
+ROOT:   @types/node (Node ≥18) declares a global NON-generic `ProgressEvent`
+        that shadows lib.dom's generic one, so:
+        - `new ProgressEvent("error")` typed as ProgressEvent<EventTarget>;
+        - `new ProgressEvent<FileReader>()` is invalid syntax for it;
+        - the FileReader.onerror handler needs ProgressEvent<FileReader>.
+
+FIX:    Cast the Node global to the DOM shape through unknown:
+          const ev = new ProgressEvent("error") as unknown as
+            ProgressEvent<FileReader>;
+          this.onerror?.(ev);
+
+--------------------------------------------------------------------------------
+14. next build: Metadata union type access errors in config.test.ts
+--------------------------------------------------------------------------------
+WHEN: `npm run build` — test/lib/config.test.ts.
+WHERE: `md.openGraph?.images?.[0]` and `md.twitter?.card`.
+
+ERROR:  TS7053: Element implicitly has an 'any' type … (images is OGImage |
+        OGImage[], not an array).
+        TS2339: Property 'card' does not exist on type 'TwitterMetadata'
+        (`Card` lives on the tweet-card members of the discriminated union.)
+
+ROOT:   The metadata return type is a UNION in Next 16, so both `[0]`-indexing
+        and `.card` access are invalid unless the type is narrowed.
+        The test only needed the values, not the widened type.
+
+FIX:    Narrow via Array.isArray and assert with objectContaining:
+          const images = md.openGraph?.images;
+          const first = Array.isArray(images) ? images[0] : images;
+          expect(first).toEqual(
+            expect.objectContaining({ width: 1200, height: 630 })
+          );
+          expect(md.twitter).toEqual(
+            expect.objectContaining({ card: "summary_large_image" })
+          );
+
+================================================================================
+RESULT
+================================================================================
+Final run:  Test Files  16 passed (16)
+            Tests       74 passed (74)
+            npm run lint   → 0 errors, 0 warnings
+            npm run build  → compiles + type-checks + generates 11 routes
+                             (/, /features, /voice, /api/chat, /api/tts,
+                             /_not-found, /icon.png, /icon.svg, /robots.txt,
+                             /sitemap.xml)
+================================================================================

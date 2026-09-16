@@ -10,8 +10,14 @@
   --font-sans: var(--font-inter);
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-inter);
+  /* ------------------------------------------------------------------
+   * Aura design tokens — the single source of truth for all brand colors.
+   * Use `text-accent-mauve`, `bg-soft-pink`, etc. instead of raw hex
+   * values so the visual language stays consistent and easy to update.
+   * ------------------------------------------------------------------ */
   --color-cream: #fdfbf7;
   --color-accent-mauve: #7a5c6b;
+  --color-accent-mauve-hover: #6a4c5b;
   --color-dusty-mauve: #9b7a8a;
   --color-warm-text: #5c5c5c;
   --color-soft-pink: #fce8f0;
@@ -19,6 +25,14 @@
   --color-warm-edge: #f0dec0;
   --color-line: #f0f0f0;
   --color-line-strong: #e5e5e5;
+  /* Panel surfaces used by the voice cards (soft cream on beige gradient). */
+  --color-panel-bg: #fdf6ed;
+  --color-panel-border: #f0e4d5;
+  /* Muted text (#9CA3AF was only ~2.4:1 contrast — this passes WCAG AA). */
+  --color-text-muted: #6b7280;
+  /* Error / recording states. */
+  --color-error: #b4555c;
+  --color-danger: #c0525a;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);

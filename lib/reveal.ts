@@ -5,19 +5,30 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { SplitText } from "gsap/SplitText";
 import { useEffect, type RefObject } from "react";
 
+// Register the GSAP plugins once (guard for SSR where `window` is undefined).
 if (typeof window !== "undefined") {
   gsap.registerPlugin(ScrollTrigger, SplitText);
 }
 
+/** True when the user prefers reduced motion (or the API is unavailable). */
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
 /**
- * Scans the given scope once on mount and wires up the site-wide
- * gsap entrance / scroll / stagger / split-text animations.
+ * Scans the given scope once on mount and wires up the site-wide GSAP
+ * entrance / scroll / stagger / split-text animations.
  *
  * Markup hints:
- * - [data-hero-fade]        -> staggered fade-up on page load (hero content)
- * - [data-reveal]           -> fade-up when scrolled into view
- * - [data-stagger]          -> children with [data-stagger-item] fade-up in sequence
- * - [data-split-text]       -> heading words animate up one by one on scroll
+ * - `data-hero-fade`        → staggered fade-up on page load (hero content)
+ * - `data-reveal`           → fade-up when scrolled into view
+ * - `data-stagger`          → children with `data-stagger-item` fade-up in sequence
+ * - `data-split-text`       → heading words animate up one by one on scroll
+ *
+ * Respects `prefers-reduced-motion` and reverts all tween state on unmount.
  */
 export function useRevealAnimations<T extends HTMLElement>(
   ref: RefObject<T | null>
@@ -26,9 +37,13 @@ export function useRevealAnimations<T extends HTMLElement>(
     const scope = ref.current;
     if (!scope) return;
 
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    // Accessibility: skip animation entirely for reduced-motion users.
+    if (prefersReducedMotion()) return;
 
+    // All tweens + ScrollTriggers live inside one context scoped to `scope`,
+    // so `ctx.revert()` cleanly kills everything on cleanup.
     const ctx = gsap.context(() => {
+      // 1. Hero load-in: fade up staggered children on mount.
       gsap.fromTo(
         "[data-hero-fade]",
         { opacity: 0, y: 26 },
@@ -42,6 +57,7 @@ export function useRevealAnimations<T extends HTMLElement>(
         }
       );
 
+      // 2. Scroll reveal: fade each [data-reveal] block up as it enters 85%.
       gsap.utils.toArray<HTMLElement>("[data-reveal]").forEach((el) => {
         gsap.fromTo(
           el,
@@ -56,6 +72,7 @@ export function useRevealAnimations<T extends HTMLElement>(
         );
       });
 
+      // 3. Staggered grids: children of [data-stagger] appear one by one.
       gsap.utils.toArray<HTMLElement>("[data-stagger]").forEach((group) => {
         const items = Array.from(
           group.querySelectorAll("[data-stagger-item]")
@@ -74,6 +91,7 @@ export function useRevealAnimations<T extends HTMLElement>(
         );
       });
 
+      // 4. Split-text headlines: words rise into place one by one on scroll.
       gsap.utils.toArray<HTMLElement>("[data-split-text]").forEach((el) => {
         const split = new SplitText(el, {
           type: "words",

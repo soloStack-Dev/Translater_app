@@ -8,8 +8,14 @@ type Props = {
   onSelect: (code: LanguageCode) => void;
 };
 
-// Radio-style grid of the four supported languages.
-// Selecting a language updates the panel that shares it.
+/**
+ * Radio-style 2×2 grid of the four supported languages.
+ *
+ * Accessibility:
+ *  - `role="radiogroup"` + `role="radio"` + `aria-checked` so screen readers
+ *    announce the group and the active option.
+ *  - Each button is keyboard-focusable and responds to Enter/Space.
+ */
 export function LanguageSelector({ selected, onSelect }: Props) {
   return (
     <div
@@ -19,26 +25,26 @@ export function LanguageSelector({ selected, onSelect }: Props) {
       aria-label="Choose your language"
     >
       {LANGUAGES.map((lang) => {
-        const active = lang.code === selected;
+        const isActive = lang.code === selected;
         return (
           <button
             key={lang.code}
             type="button"
             role="radio"
-            aria-checked={active}
+            aria-checked={isActive}
             onClick={() => onSelect(lang.code)}
             className={cn(
-              "rounded-2xl px-4 py-3 text-left transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7A5C6B]",
-              active
-                ? "bg-[#7A5C6B] text-white shadow-[0_8px_24px_rgba(122,92,107,0.35)]"
-                : "bg-white/80 border border-[#E5E5E5] text-[#5C5C5C] hover:border-[#7A5C6B]/40 hover:shadow-md"
+              "rounded-2xl px-4 py-3 text-left transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-mauve",
+              isActive
+                ? "bg-accent-mauve text-white shadow-[0_8px_24px_rgba(122,92,107,0.35)]"
+                : "border border-line-strong bg-white/80 text-warm-text hover:border-accent-mauve/40 hover:shadow-md"
             )}
           >
             <span className="block text-sm font-semibold">{lang.name}</span>
             <span
               className={cn(
                 "mt-0.5 block text-xs",
-                active ? "text-white/80" : "text-[#9CA3AF]"
+                isActive ? "text-white/80" : "text-text-muted"
               )}
             >
               {lang.greeting} · {lang.code}
