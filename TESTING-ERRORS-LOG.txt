@@ -266,6 +266,38 @@ FIX:    Narrow via Array.isArray and assert with objectContaining:
             expect.objectContaining({ card: "summary_large_image" })
           );
 
+--------------------------------------------------------------------------------
+15. Vercel redeploy failed: "npm error ERESOLVE could not resolve"
+--------------------------------------------------------------------------------
+WHEN: Vercel production build's "Installing dependencies…" step (Vercel runs
+      a plain `npm install`; it does NOT pass --legacy-peer-deps).
+WHERE: package.json devDependencies — the whole resolution of the test stack.
+
+ERROR:  npm error code ERESOLVE … While resolving: vitest@5.0.1
+          Found: @types/node@20.19.43  (dev @types/node@"^20" from the root)
+          Could not resolve dependency:
+            peerOptional @types/node@"^22.0.0 || >=24.0.0" from vitest@5.0.1
+          Conflicting peer dependency: @types/node@22.20.3
+
+ROOT:   vitest@5.0.1 declares an OPTIONAL peer of `@types/node@^22 || >=24`,
+        but the repo pinned `@types/node@^20` (resolving to 20.19.43). Locally
+        this never surfaced because every `npm install` was run with
+        `--legacy-peer-deps`, which SKIPS peer resolution. On Vercel the plain
+        install hit the ERESOLVE and aborted before `vercel build` ran.
+        (vite@8.3.0 accepts `^20.19.0 || >=22.12.0`, so BOTH packages are
+        happy with a single @types/node@22.)
+
+FIX:    Bumped the dev dependency to satisfy vitest's range:
+          package.json:  "@types/node": "^20"  →  "^22"
+        Deleted the stale package-lock.json (it was generated under
+        --legacy-peer-deps) and re-ran a PLAIN `npm install` (no flags); npm
+        now resolves cleanly and regenerates a peer-consistent lockfile.
+        `npm ls @types/node` shows 22.20.3, deduped and shared by both vite
+        and vitest.
+        With the fix, `npm install` (exactly what Vercel runs) completes with
+        no ERESOLVE, and the lockfile committed to the repo carries the
+        peer-valid tree so builds are reproducible.
+
 ================================================================================
 RESULT
 ================================================================================
